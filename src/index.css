@@ -1,0 +1,119 @@
+@import url('https://fonts.cdnfonts.com/css/lufga');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+.font-lufga {
+  font-family: 'Lufga', sans-serif;
+}
+
+@layer base {
+  :root {
+    /* #407b75 = hsl(172, 32%, 37%) - Town Teal primary */
+    /* #9B3515 = hsl(14, 76%, 35%) - Rust accent */
+    --background: 172 10% 97%;
+    --foreground: 172 50% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 172 50% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 172 50% 15%;
+
+    --primary: 172 32% 37%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 20% 92%;
+    --secondary-foreground: 172 50% 15%;
+
+    --muted: 172 10% 92%;
+    --muted-foreground: 172 20% 40%;
+
+    --accent: 14 76% 35%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 150 60% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 14 76% 35%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 172 20% 85%;
+    --input: 172 20% 85%;
+    --ring: 172 32% 37%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 172 50% 20%;
+    --sidebar-primary: 172 32% 37%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 172 15% 95%;
+    --sidebar-accent-foreground: 172 50% 15%;
+    --sidebar-border: 172 20% 88%;
+    --sidebar-ring: 172 32% 37%;
+  }
+
+  .dark {
+    --background: 172 40% 8%;
+    --foreground: 172 10% 95%;
+
+    --card: 172 35% 12%;
+    --card-foreground: 172 10% 95%;
+
+    --popover: 172 35% 12%;
+    --popover-foreground: 172 10% 95%;
+
+    --primary: 172 32% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 25% 18%;
+    --secondary-foreground: 172 10% 95%;
+
+    --muted: 172 20% 16%;
+    --muted-foreground: 172 15% 60%;
+
+    --accent: 14 70% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 150 50% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 14 70% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 172 25% 20%;
+    --input: 172 25% 20%;
+    --ring: 172 32% 45%;
+
+    --sidebar-background: 172 40% 8%;
+    --sidebar-foreground: 172 10% 95%;
+    --sidebar-primary: 172 32% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 172 25% 15%;
+    --sidebar-accent-foreground: 172 10% 95%;
+    --sidebar-border: 172 25% 18%;
+    --sidebar-ring: 172 32% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

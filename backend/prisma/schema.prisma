@@ -1,0 +1,572 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String                          @id @default(uuid())
+  email             String                          @unique
+  passwordHash      String                          @map("password_hash")
+  createdAt         DateTime                        @default(now()) @map("created_at")
+  updatedAt         DateTime                        @updatedAt @map("updated_at")
+  auditLogs         AuditLog[]
+  comments          Comment[]
+  dmParticipants    DirectConversationParticipant[]
+  directMessages    DirectMessage[]
+  profile           Profile?
+  subtasks          Subtask[]
+  taskNotifications TaskNotification[]
+  assignedTasks     Task[]                          @relation("TaskAssignee")
+  tasks             Task[]                          @relation("TaskReporter")
+  userRoles         UserRole[]
+  workspaceMembers  WorkspaceMember[]
+  workspaces        Workspace[]
+
+  @@map("users")
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  name      String
+  email     String
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  role      AppRole
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model Workspace {
+  id          String            @id @default(uuid())
+  name        String
+  description String?
+  logoUrl     String?           @map("logo_url")
+  createdBy   String            @map("created_by")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  auditLogs   AuditLog[]
+  spaces      Space[]
+  tags        Tag[]
+  members     WorkspaceMember[]
+  creator     User              @relation(fields: [createdBy], references: [id])
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  workspaceId String        @map("workspace_id")
+  userId      String        @map("user_id")
+  userEmail   String        @map("user_email")
+  userName    String        @map("user_name")
+  role        WorkspaceRole @default(member)
+  invitedAt   DateTime      @default(now()) @map("invited_at")
+  joinedAt    DateTime?     @map("joined_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Space {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  name        String
+  color       String?   @default("#407b75")
+  icon        String?   @default("folder")
+  orderIndex  Int       @default(0) @map("order_index")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  folders     Folder[]
+  lists       List[]
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("spaces")
+}
+
+model Folder {
+  id         String   @id @default(uuid())
+  spaceId    String   @map("space_id")
+  name       String
+  orderIndex Int      @default(0) @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  lists      List[]
+
+  @@map("folders")
+}
+
+model List {
+  id         String   @id @default(uuid())
+  spaceId    String   @map("space_id")
+  folderId   String?  @map("folder_id")
+  name       String
+  orderIndex Int      @default(0) @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  folder     Folder?  @relation(fields: [folderId], references: [id])
+  space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  statuses   Status[]
+  tasks      Task[]
+
+  @@map("lists")
+}
+
+model Status {
+  id         String   @id @default(uuid())
+  listId     String   @map("list_id")
+  name       String
+  color      String   @default("#407b75")
+  isDone     Boolean  @default(false) @map("is_done")
+  orderIndex Int      @default(0) @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+  list       List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+
+  @@map("statuses")
+}
+
+model Task {
+  id                String          @id @default(uuid())
+  listId            String          @map("list_id")
+  statusId          String?         @map("status_id")
+  title             String
+  description       String?
+  priority          TaskPriority    @default(normal)
+  assigneeId        String?         @map("assignee_id")
+  assigneeName      String?         @map("assignee_name")
+  reporterId        String          @map("reporter_id")
+  reporterName      String          @map("reporter_name")
+  startDate         DateTime?       @map("start_date")
+  dueDate           DateTime?       @map("due_date")
+  orderIndex        Int             @default(0) @map("order_index")
+  deletedAt         DateTime?       @map("deleted_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  cidadeClientId    String?         @map("cidade_client_id")
+  assigned_at       DateTime?       @db.Timestamptz(6)
+  status_changed_at DateTime?       @db.Timestamptz(6)
+  inside_member_id  String?         @db.Uuid
+  checklistItems    ChecklistItem[]
+  comments          Comment[]
+  subtasks          Subtask[]
+  tags              TaskTag[]
+  watchers          TaskWatcher[]
+  assignee          User?           @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  cidadeClient      CidadeClient?   @relation(fields: [cidadeClientId], references: [id])
+  inside_members    inside_members? @relation(fields: [inside_member_id], references: [id], onUpdate: NoAction)
+  list              List            @relation(fields: [listId], references: [id], onDelete: Cascade)
+  reporter          User            @relation("TaskReporter", fields: [reporterId], references: [id])
+  status            Status?         @relation(fields: [statusId], references: [id])
+
+  @@map("tasks")
+}
+
+model CidadeClient {
+  id                         String                 @id @default(uuid())
+  name                       String
+  imageUrl                   String?                @map("image_url")
+  driveLink                  String?                @map("drive_link")
+  briefingNotes              String?                @map("briefing_notes")
+  niche                      String?
+  createdAt                  DateTime               @default(now()) @map("created_at")
+  updatedAt                  DateTime               @updatedAt @map("updated_at")
+  package                    CidadeClientPackage?
+  email                      String?
+  phone                      String?
+  contractValue              Float?                 @map("contract_value")
+  contractStartDate          DateTime?              @map("contract_start_date") @db.Date
+  last_recording_date        DateTime?              @db.Date
+  next_recording_date        DateTime?              @db.Date
+  crm_tenant_id              String?                @db.VarChar(255)
+  crm_tenant_slug            String?                @db.VarChar(255)
+  linkedin_access_token      String?                @map("linkedin_access_token")
+  linkedin_refresh_token     String?                @map("linkedin_refresh_token")
+  linkedin_token_expires_at  DateTime?              @map("linkedin_token_expires_at")
+  linkedin_ad_account_id     String?                @map("linkedin_ad_account_id")
+  recording_time             String?                @db.VarChar(5)
+  reels_per_session          Int?
+  videos_per_week            Int?
+  recording_reminder_sent_at DateTime?              @db.Date
+  milestone                  CidadeClientMilestone?
+  tasks                      Task[]
+
+  @@map("cidade_clients")
+}
+
+model CidadeClientMilestone {
+  id                     String       @id @default(uuid())
+  clientId               String       @unique @map("client_id")
+  assinaturaCliente      DateTime?    @map("assinatura_cliente")
+  primeiroPagamento      DateTime?    @map("primeiro_pagamento")
+  reuniaoBriefing        DateTime?    @map("reuniao_briefing")
+  materialDrive          DateTime?    @map("material_drive")
+  acessoRedes            DateTime?    @map("acesso_redes")
+  entregaRoteiro         DateTime?    @map("entrega_roteiro")
+  dataGravacao           DateTime?    @map("data_gravacao")
+  edicaoFotos            DateTime?    @map("edicao_fotos")
+  edicaoVideos           DateTime?    @map("edicao_videos")
+  backup                 DateTime?    @map("backup")
+  analisePerfil          DateTime?    @map("analise_perfil")
+  cronogramaMensal       DateTime?    @map("cronograma_mensal")
+  google                 DateTime?    @map("google")
+  landingPage            DateTime?    @map("landing_page")
+  linkedin               DateTime?    @map("linkedin")
+  trafegoPago            DateTime?    @map("trafego_pago")
+  entregaAprovacaoPosts  DateTime?    @map("entrega_aprovacao_posts")
+  solicitacoesAlteracoes DateTime?    @map("solicitacoes_alteracoes")
+  primeiraPostagemFeed   DateTime?    @map("primeira_postagem_feed")
+  createdAt              DateTime     @default(now()) @map("created_at")
+  updatedAt              DateTime     @updatedAt @map("updated_at")
+  client                 CidadeClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("cidade_client_milestones")
+}
+
+model Subtask {
+  id           String   @id @default(uuid())
+  taskId       String   @map("task_id")
+  title        String
+  isDone       Boolean  @default(false) @map("is_done")
+  assigneeId   String?  @map("assignee_id")
+  assigneeName String?  @map("assignee_name")
+  orderIndex   Int      @default(0) @map("order_index")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  assignee     User?    @relation(fields: [assigneeId], references: [id])
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("subtasks")
+}
+
+model ChecklistItem {
+  id         String   @id @default(uuid())
+  taskId     String   @map("task_id")
+  title      String
+  isDone     Boolean  @default(false) @map("is_done")
+  orderIndex Int      @default(0) @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("checklist_items")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  userName  String   @map("user_name")
+  userEmail String   @map("user_email")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("comments")
+}
+
+model Tag {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  name        String
+  color       String    @default("#9b3515")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks       TaskTag[]
+
+  @@map("tags")
+}
+
+model TaskTag {
+  taskId String @map("task_id")
+  tagId  String @map("tag_id")
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@map("task_tags")
+}
+
+model TaskWatcher {
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  userEmail String   @map("user_email")
+  createdAt DateTime @default(now()) @map("created_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@map("task_watchers")
+}
+
+model TaskNotification {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  type       String
+  title      String
+  message    String?
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("task_notifications")
+}
+
+model AuditLog {
+  id          String     @id @default(uuid())
+  workspaceId String?    @map("workspace_id")
+  actorId     String     @map("actor_id")
+  actorName   String     @map("actor_name")
+  entityType  String     @map("entity_type")
+  entityId    String     @map("entity_id")
+  action      String
+  diffJson    Json?      @map("diff_json")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  actor       User       @relation(fields: [actorId], references: [id])
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Client {
+  id                String           @id @default(uuid())
+  name              String
+  email             String?
+  mapaCidadeEmail   String?          @map("mapa_cidade_email")
+  imageUrl          String?          @map("image_url")
+  niche             String?
+  lastRecordingDate DateTime?        @map("last_recording_date")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  crm_tenant_id     String?          @db.VarChar(255)
+  crm_tenant_slug   String?          @db.VarChar(255)
+  milestone         ClientMilestone?
+  leads             Lead[]
+
+  @@map("clients")
+}
+
+model ClientMilestone {
+  id                   String    @id @default(uuid())
+  clientId             String    @unique @map("client_id")
+  clientEmail          String?   @map("client_email")
+  partnerEmail         String?   @map("partner_email")
+  assinaturaCliente    DateTime? @map("assinatura_cliente")
+  primeiroPagamento    DateTime? @map("primeiro_pagamento")
+  reuniaoBriefing      DateTime? @map("reuniao_briefing")
+  materialDrive        DateTime? @map("material_drive")
+  acessoRedes          DateTime? @map("acesso_redes")
+  entregaRoteiro       DateTime? @map("entrega_roteiro")
+  dataGravacao         DateTime? @map("data_gravacao")
+  primeiraPostagemFeed DateTime? @map("primeira_postagem_feed")
+  linkedin             DateTime? @map("linkedin")
+  trafegoPago          DateTime? @map("trafego_pago")
+  analisePerfil        DateTime? @map("analise_perfil")
+  cronogramaMensal     DateTime? @map("cronograma_mensal")
+  google               DateTime? @map("google")
+  landingPage          DateTime? @map("landing_page")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  client               Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_milestones")
+}
+
+model DirectConversation {
+  id           String                          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  createdAt    DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime                        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isGroup      Boolean?                        @default(false) @map("is_group")
+  groupName    String?                         @map("group_name")
+  createdBy    String?                         @map("created_by")
+  participants DirectConversationParticipant[]
+  messages     DirectMessage[]
+
+  @@map("direct_conversations")
+}
+
+model DirectConversationParticipant {
+  id             String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  conversationId String             @map("conversation_id")
+  userId         String             @map("user_id")
+  lastReadAt     DateTime?          @map("last_read_at") @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation   DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([conversationId, userId])
+  @@map("direct_conversation_participants")
+}
+
+model DirectMessage {
+  id             String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  conversationId String             @map("conversation_id")
+  senderId       String             @map("sender_id")
+  content        String?
+  fileUrl        String?            @map("file_url")
+  fileName       String?            @map("file_name")
+  fileType       String?            @map("file_type")
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation   DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sender         User               @relation(fields: [senderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("direct_messages")
+}
+
+model Lead {
+  id           String   @id @default(uuid())
+  clientId     String   @map("client_id")
+  platform     String
+  niche        String?
+  leadCount    Int      @default(0) @map("lead_count")
+  campaignName String?  @map("campaign_name")
+  date         DateTime @default(now())
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("leads")
+}
+
+model cidade_client_files {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id     String    @db.Uuid
+  original_name String    @db.VarChar(255)
+  url           String
+  mime_type     String?   @db.VarChar(100)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  folder_id     String?   @db.Uuid
+}
+
+model cidade_client_folders {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id  String    @db.Uuid
+  name       String    @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model inside_demand_files {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demand_id      String         @db.Uuid
+  original_name  String         @db.VarChar(255)
+  url            String
+  mime_type      String?        @db.VarChar(100)
+  created_at     DateTime?      @default(now()) @db.Timestamp(6)
+  inside_demands inside_demands @relation(fields: [demand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model inside_demands {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title               String                @db.VarChar(500)
+  description         String?
+  member_id           String?               @db.Uuid
+  status              String?               @default("pending") @db.VarChar(50)
+  deadline            DateTime?             @db.Date
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamp(6)
+  inside_demand_files inside_demand_files[]
+  inside_members      inside_members?       @relation(fields: [member_id], references: [id], onUpdate: NoAction)
+}
+
+model inside_inbox {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  to_user_id         String    @db.Uuid
+  from_user_id       String    @db.Uuid
+  from_name          String?   @db.VarChar(255)
+  body               String?
+  file_url           String?
+  file_original_name String?   @db.VarChar(255)
+  file_mime_type     String?   @db.VarChar(100)
+  is_read            Boolean?  @default(false)
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model inside_members {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String           @db.VarChar(255)
+  role           String?          @db.VarChar(255)
+  email          String?          @db.VarChar(255)
+  phone          String?          @db.VarChar(100)
+  image_url      String?
+  created_at     DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at     DateTime?        @default(now()) @db.Timestamp(6)
+  user_id        String?          @db.Uuid
+  inside_demands inside_demands[]
+  tasks          Task[]
+}
+
+model postagens_folders {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id       String            @db.Uuid
+  name            String            @db.VarChar(255)
+  created_at      DateTime?         @default(now()) @db.Timestamp(6)
+  postagens_links postagens_links[]
+}
+
+model postagens_links {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  folder_id         String            @db.Uuid
+  client_id         String            @db.Uuid
+  title             String            @db.VarChar(500)
+  url               String
+  link_date         DateTime?         @db.Date
+  created_at        DateTime?         @default(now()) @db.Timestamp(6)
+  postagens_folders postagens_folders @relation(fields: [folder_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model task_files {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id       String
+  original_name String    @db.VarChar(255)
+  url           String
+  mime_type     String?   @db.VarChar(100)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+}
+
+enum AppRole {
+  client
+  employee
+  admin
+  second_owner
+}
+
+enum TaskPriority {
+  urgent
+  high
+  normal
+  low
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  member
+  guest
+}
+
+enum CidadeClientPackage {
+  acelerador
+  start_line
+}
