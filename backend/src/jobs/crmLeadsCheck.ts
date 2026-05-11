@@ -234,7 +234,7 @@ async function processClientLeads(client: {
   if (!freshLeads.length) return;
 
   const io = getIO();
-  const waPhone = client.whatsapp_number || client.phone || "";
+  const waPhone = client.whatsapp_number || "";
 
   for (const lead of freshLeads) {
     const leadId = String(lead.id ?? lead.leadId ?? "");
@@ -311,7 +311,7 @@ export async function sendLeadWhatsAppManual(
   if (!clientRows.length) return { ok: false, error: "Cliente não encontrado" };
   const client = clientRows[0];
 
-  const waPhone = client.whatsapp_number || client.phone || "";
+  const waPhone = client.whatsapp_number || "";
   if (!waPhone) return { ok: false, error: "Nenhum número de WhatsApp configurado para este cliente" };
   if (!client.crm_tenant_id) return { ok: false, error: "Cliente sem CRM ativado" };
 
