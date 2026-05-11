@@ -107,7 +107,7 @@ export async function sendWhatsAppLeadMessage(
 
   if (!waUrl || !waKey || !instance) return false;
 
-  const number = formatPhone(phone);
+  const number = phone.includes('@') ? phone : formatPhone(phone);
 
   const icon  = isWon ? "🏆" : isLost ? "❌" : "🎯";
   const label = isWon ? "Lead ganho" : isLost ? "Lead perdido" : "Novo lead";
