@@ -5,11 +5,32 @@ import { TrafegoClientDialog } from "@/components/TrafegoClientDialog";
 import { ClientCircle } from "@/components/ClientCircle";
 import { useClients, Client } from "@/hooks/useClients";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 const TOTAL_SLOTS = 30;
 const OWNER_EMAIL = "gustavosaforti@gmail.com";
 const CRM_URL = import.meta.env.VITE_CRM_URL || "http://localhost:5173";
+
+const MATHEUS_CLIENTS = [
+  "lansoni", "dinor", "h&h", "paz mendes", "garcia guedes", "diego cruz",
+  "miguel cassiano", "souza menezes", "victor púpio", "victor pupío", "almeida lima",
+  "ellion lopes", "hellen pestile",
+];
+
+function isMatheus(name: string) {
+  const n = name.toLowerCase();
+  return MATHEUS_CLIENTS.some((m) => n.includes(m));
+}
+
+function getCplColor(cpl: number | null | undefined): string | null {
+  if (cpl === null || cpl === undefined) return null;
+  if (cpl < 100) return "#22c55e";       // verde
+  if (cpl < 120) return "#eab308";       // amarelo
+  return "#ef4444";                       // vermelho
+}
+
+type ManagerFilter = "todos" | "gelyson" | "matheus";
 
 const Trafego = () => {
   const navigate = useNavigate();
@@ -24,10 +45,16 @@ const Trafego = () => {
   const [crmTenantName, setCrmTenantName] = useState("");
   const [crmReady, setCrmReady] = useState(false);
   const [dialogClient, setDialogClient] = useState<Client | null>(null);
+  const [manager, setManager] = useState<ManagerFilter>("todos");
 
   const isOwner = user?.email === OWNER_EMAIL;
   const isAdmin = user?.isAdmin;
 
+  const { data: cplSummary } = useQuery<Record<string, number | null>>({
+    queryKey: ["cpl-summary"],
+    queryFn: () => api.get("/linkedin/cpl-summary"),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const handleClientClick = async (client: Client) => {
     setErrorMsg(null);
@@ -49,14 +76,23 @@ const Trafego = () => {
     }
   };
 
-  const filteredClients = search.trim()
-    ? (clients || []).filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : clients || [];
+  const filteredClients = (clients || []).filter((c) => {
+    if (search.trim() && !c.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    if (manager === "matheus" && !isMatheus(c.name)) return false;
+    if (manager === "gelyson" && isMatheus(c.name)) return false;
+    return true;
+  });
 
   const slots: (Client | undefined)[] = Array(TOTAL_SLOTS).fill(undefined);
   filteredClients.forEach((client, index) => {
     if (index < TOTAL_SLOTS) slots[index] = client;
   });
+
+  const managerButtons: { key: ManagerFilter; label: string }[] = [
+    { key: "todos", label: "Todos" },
+    { key: "gelyson", label: "Gelyson" },
+    { key: "matheus", label: "Matheus" },
+  ];
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={{
@@ -92,8 +128,27 @@ const Trafego = () => {
             </p>
           </div>
 
-          {/* Search bar */}
-          <div className="mt-6 flex justify-center">
+          {/* Manager filter + Search */}
+          <div className="mt-6 flex flex-col items-center gap-3">
+            {/* Manager buttons */}
+            <div className="flex gap-2">
+              {managerButtons.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setManager(key)}
+                  className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
+                  style={{
+                    background: manager === key ? "rgba(13,148,136,0.35)" : "rgba(255,255,255,0.07)",
+                    border: `1px solid ${manager === key ? "rgba(13,148,136,0.7)" : "rgba(255,255,255,0.12)"}`,
+                    color: manager === key ? "#5eead4" : "rgba(255,255,255,0.5)",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search bar */}
             <div className="relative w-full max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "rgba(255,255,255,0.35)" }} />
               <input
@@ -149,41 +204,65 @@ const Trafego = () => {
           </div>
         ) : (
           <div className="grid grid-cols-5 md:grid-cols-6 lg:grid-cols-10 gap-4 md:gap-6 justify-items-center max-w-5xl mx-auto">
-            {slots.map((client, index) => (
-              <div key={client?.id || `empty-${index}`} className="relative group">
-                {loadingClientId === client?.id && (
-                  <div className="absolute inset-0 flex items-center justify-center z-10">
-                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: "#0d9488" }} />
-                  </div>
-                )}
-                <ClientCircle
-                  client={client ? { id: index, name: client.name, image: client.image_url || undefined } : undefined}
-                  isSelected={loadingClientId === client?.id}
-                  onClick={client ? () => handleClientClick(client) : undefined}
-                />
-                {client && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDialogClient(client); }}
-                    title="Ver dados e LinkedIn Ads"
-                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
-                    style={{ background: "rgba(13,148,136,0.9)" }}
-                  >
-                    <BarChart2 className="w-3 h-3 text-white" />
-                  </button>
-                )}
-              </div>
-            ))}
+            {slots.map((client, index) => {
+              const cpl = client ? cplSummary?.[client.id] : undefined;
+              const cplColor = getCplColor(cpl);
+              return (
+                <div key={client?.id || `empty-${index}`} className="relative group">
+                  {loadingClientId === client?.id && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10">
+                      <Loader2 className="w-5 h-5 animate-spin" style={{ color: "#0d9488" }} />
+                    </div>
+                  )}
+                  {/* CPL color ring */}
+                  {cplColor && (
+                    <div className="absolute inset-0 rounded-full pointer-events-none z-10"
+                      style={{ boxShadow: `0 0 0 3px ${cplColor}`, borderRadius: "9999px" }} />
+                  )}
+                  <ClientCircle
+                    client={client ? { id: index, name: client.name, image: client.image_url || undefined } : undefined}
+                    isSelected={loadingClientId === client?.id}
+                    onClick={client ? () => handleClientClick(client) : undefined}
+                  />
+                  {client && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDialogClient(client); }}
+                      title="Ver dados e LinkedIn Ads"
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                      style={{ background: "rgba(13,148,136,0.9)" }}
+                    >
+                      <BarChart2 className="w-3 h-3 text-white" />
+                    </button>
+                  )}
+                  {/* CPL tooltip */}
+                  {cpl !== null && cpl !== undefined && (
+                    <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ color: cplColor ?? "white" }}>
+                      R${cpl.toFixed(0)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* Legenda */}
-        <div className="mt-10 flex justify-center gap-6 text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full" style={{ border: "2px solid rgba(13,148,136,0.5)", background: "rgba(13,148,136,0.1)" }} />
-            <span>Clique para acessar o CRM</span>
+        <div className="mt-10 flex justify-center flex-wrap gap-4 text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ background: "#22c55e" }} />
+            <span>CPL &lt; R$100</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full" style={{ border: "2px dashed rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)" }} />
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ background: "#eab308" }} />
+            <span>CPL R$100–120</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ background: "#ef4444" }} />
+            <span>CPL &gt; R$120</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ border: "2px dashed rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)" }} />
             <span>Vaga disponível</span>
           </div>
         </div>

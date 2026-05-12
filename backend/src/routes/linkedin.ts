@@ -10,6 +10,60 @@ const LINKEDIN_REDIRECT_URI =
   process.env.LINKEDIN_REDIRECT_URI || "http://localhost:3001/api/linkedin/callback";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:8080";
 
+// ── GET /api/linkedin/cpl-summary ────────────────────────────────────────────
+// Returns { clientId: string, cpl: number }[] for all clients with LinkedIn connected
+router.get("/cpl-summary", authenticate, async (_req: AuthRequest, res: Response) => {
+  const clients = await prisma.cidadeClient.findMany({
+    where: { linkedin_access_token: { not: null }, linkedin_ad_account_id: { not: null } },
+    select: { id: true, name: true, linkedin_access_token: true, linkedin_ad_account_id: true },
+  });
+
+  const results = await Promise.allSettled(clients.map(async (client) => {
+    const token = client.linkedin_access_token!;
+    const rawAccountUrn = `urn:li:sponsoredAccount:${client.linkedin_ad_account_id}`;
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+
+    const [campRes, analyticsRes] = await Promise.all([
+      fetch(`https://api.linkedin.com/v2/adCampaignsV2?${new URLSearchParams({
+        q: "search", "search.account.values[0]": rawAccountUrn,
+        "search.status.values[0]": "ACTIVE", "search.status.values[1]": "PAUSED", count: "50",
+      })}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000) }),
+      fetch(`https://api.linkedin.com/v2/adAnalyticsV2?${new URLSearchParams({
+        q: "analytics", pivot: "CAMPAIGN",
+        "dateRange.start.day": String(start.getDate()), "dateRange.start.month": String(start.getMonth() + 1), "dateRange.start.year": String(start.getFullYear()),
+        "dateRange.end.day": String(end.getDate()), "dateRange.end.month": String(end.getMonth() + 1), "dateRange.end.year": String(end.getFullYear()),
+        "accounts[0]": rawAccountUrn, timeGranularity: "ALL",
+        fields: "costInLocalCurrency,oneClickLeads,pivotValues",
+      })}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000) }),
+    ]);
+
+    if (!campRes.ok) return { clientId: client.id, cpl: null };
+
+    const campaigns: any[] = ((await campRes.json()) as any).elements ?? [];
+    const analytics: any[] = analyticsRes.ok ? ((await analyticsRes.json()) as any).elements ?? [] : [];
+
+    let totalLeads = 0, totalSpend = 0;
+    for (const c of campaigns) {
+      const urn = `urn:li:sponsoredCampaign:${c.id}`;
+      const stats = analytics.find((a: any) => (a.pivotValues ?? []).some((v: string) => v === urn || v.includes(String(c.id)))) ?? {};
+      totalLeads += stats.oneClickLeads ?? 0;
+      totalSpend += parseFloat(String(stats.costInLocalCurrency ?? 0)) || 0;
+    }
+
+    return { clientId: client.id, cpl: totalLeads > 0 ? totalSpend / totalLeads : null };
+  }));
+
+  const summary: Record<string, number | null> = {};
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") summary[r.value.clientId] = r.value.cpl;
+    else summary[clients[i].id] = null;
+  });
+
+  res.json(summary);
+});
+
 // ── GET /api/linkedin/auth-url?clientId=xxx ──────────────────────────────────
 router.get("/auth-url", authenticate, (req: AuthRequest, res: Response) => {
   const { clientId } = req.query;
